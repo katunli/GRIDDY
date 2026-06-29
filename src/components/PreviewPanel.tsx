@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useEditor } from "../EditorContext";
-import { SelectionMode, WeightEntry } from "../grid-types";
+import { LayerMode, WeightEntry } from "../grid-types";
 import { buildQualtricsSnippet } from "../lib/qualtricsExport";
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -10,19 +10,46 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function getSelectionModeLabel(mode: SelectionMode): string {
-  switch (mode) {
-    case "dropdown":
-      return "Dropdown per cell";
-    case "dragdrop":
-      return "Drag and drop";
-    case "paint":
-    default:
-      return "Select then click";
-  }
-}
 
-function renderAssignedContent(category: string, imageUrl: string) {
+function renderAssignedContent(
+  category: string,
+  imageUrl: string,
+  color: string,
+  layerMode: LayerMode = "replace",
+) {
+  if (imageUrl && layerMode === "front") {
+    return (
+      <>
+        <img
+          src={imageUrl}
+          alt={category}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+        <span
+          className="absolute bottom-0 left-0 right-0 truncate px-0.5 pb-0.5 text-center text-[8px] font-medium leading-tight"
+          style={{ backgroundColor: hexToRgba(color, 0.75), color: "#0f172a" }}
+        >
+          {category}
+        </span>
+      </>
+    );
+  }
+
+  if (imageUrl && layerMode === "behind") {
+    return (
+      <>
+        <img
+          src={imageUrl}
+          alt={category}
+          className="absolute inset-0 h-full w-full object-contain opacity-20"
+        />
+        <div className="relative z-10 flex flex-1 items-center justify-center p-1 text-center text-[10px] leading-tight">
+          {category}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {imageUrl && (
@@ -347,35 +374,29 @@ export const PreviewPanel: React.FC = () => {
     <>
       <section
         aria-label="Grid preview"
-        className="flex h-full min-h-0 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:overflow-hidden"
+        className="flex flex-col gap-3 rounded-xl border border-hairline-warm bg-paper-card p-5 md:sticky md:top-6"
       >
         <header className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-800">Live preview</h2>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>
-              {layout.rows} × {layout.cols}
-            </span>
-            {!expEnabled && survey.allowInteraction && categories.length > 0 && (
-              <span>{getSelectionModeLabel(survey.selectionMode)}</span>
-            )}
-            {expEnabled && (
-              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-                Experimental
-              </span>
-            )}
-          </div>
+          <h2 className="font-serif text-base font-semibold text-ink">Live preview</h2>
+          <span className="font-serif text-[12.5px] italic text-ink-muted">
+            {expEnabled
+              ? experimentalTab === "setup"
+                ? `Setup · ${experimental.prefillMode.charAt(0).toUpperCase() + experimental.prefillMode.slice(1)}`
+                : "Respondent view"
+              : `${layout.rows} × ${layout.cols}`}
+          </span>
         </header>
 
-        {/* Experimental Setup / Respondent tab toggle */}
+        {/* Setup / Respondent toggle — only when experiment is on */}
         {expEnabled && (
-          <div className="inline-flex self-start items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+          <div className="inline-flex items-center gap-1 self-start rounded-lg border border-hairline-warm bg-paper-window p-0.5 text-xs">
             <button
               type="button"
               onClick={() => setExperimentalTab("setup")}
-              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+              className={`rounded-[7px] px-3.5 py-1.5 font-bold transition-colors ${
                 experimentalTab === "setup"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:bg-white/60"
+                  ? "bg-paper-card text-ink shadow-sm"
+                  : "text-ink-muted hover:bg-paper-card/60"
               }`}
             >
               Setup
@@ -383,53 +404,24 @@ export const PreviewPanel: React.FC = () => {
             <button
               type="button"
               onClick={switchToRespondent}
-              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+              className={`rounded-[7px] px-3.5 py-1.5 font-bold transition-colors ${
                 experimentalTab === "respondent"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:bg-white/60"
+                  ? "bg-paper-card text-ink shadow-sm"
+                  : "text-ink-muted hover:bg-paper-card/60"
               }`}
             >
-              Respondent Preview
+              Respondent preview
             </button>
           </div>
         )}
 
-        {/* Weighted mode: regenerate button in setup tab */}
+        {/* Weighted-mode hint (no button here — Regenerate lives in the bottom bar) */}
         {expEnabled &&
           experimentalTab === "setup" &&
           experimental.prefillMode === "weighted" && (
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-slate-500 flex-1">
-                Sample preview — each respondent gets an independent draw.
-              </p>
-              <button
-                type="button"
-                onClick={regenerateWeighted}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  className="h-3.5 w-3.5"
-                >
-                  <path
-                    d="M16.25 10a6.25 6.25 0 1 1-1.83-4.42"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M16.25 4.58v3.34h-3.33"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Regenerate
-              </button>
-            </div>
+            <p className="text-xs text-ink-muted">
+              Sample preview — each respondent gets an independent draw.
+            </p>
           )}
 
         {/* Paint toolbar */}
@@ -554,15 +546,15 @@ export const PreviewPanel: React.FC = () => {
 
         {/* Experimental respondent hint */}
         {expEnabled && experimentalTab === "respondent" && responseLabels.length === 0 && (
-          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-            No response labels defined — add them in the Survey tab under Experimental Mode.
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            No response labels defined — add them in the experiment section.
           </p>
         )}
 
-        <p className="text-sm text-slate-700">{layout.questionText}</p>
+        <p className="font-serif text-[17px] text-ink">{layout.questionText}</p>
 
         <div
-          className="relative min-h-0 w-full flex-1 overflow-hidden rounded-md border border-slate-200 bg-slate-50"
+          className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-hairline-warm bg-paper-window"
           style={{
             width: "100%",
             aspectRatio: `${tuning.previewWidth} / ${tuning.previewHeight}`,
@@ -590,6 +582,7 @@ export const PreviewPanel: React.FC = () => {
               const catMeta = assignedCat ? survey.categoryMeta[assignedCat] : null;
               const catColor = catMeta?.color ?? "#60a5fa";
               const catImage = catMeta?.imageUrl ?? "";
+              const catLayerMode: LayerMode = catMeta?.layerMode ?? "replace";
               const isDropTarget =
                 !expEnabled &&
                 survey.selectionMode === "dragdrop" &&
@@ -603,6 +596,7 @@ export const PreviewPanel: React.FC = () => {
                   : null;
                 const respColor = respMeta?.color ?? "#8b5cf6";
                 const respImage = respMeta?.imageUrl ?? "";
+                const respLayerMode: LayerMode = respMeta?.layerMode ?? "replace";
                 const hasResponse = Boolean(selectedResponse);
                 const isRespDropTarget =
                   survey.selectionMode === "dragdrop" && dragOverCell === cell.key;
@@ -611,7 +605,7 @@ export const PreviewPanel: React.FC = () => {
                 return (
                   <div
                     key={cell.key}
-                    className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md font-medium transition-colors${
+                    className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg font-medium transition-colors${
                       hasResponse ? " border-2" : " border"
                     }${isInteractive ? " cursor-pointer" : ""}`}
                     onClick={() => {
@@ -661,7 +655,7 @@ export const PreviewPanel: React.FC = () => {
                           }
                         : hasResponse && assignedCat
                         ? {
-                            backgroundColor: hexToRgba(catColor, 0.2),
+                            backgroundColor: catLayerMode === "front" ? "transparent" : hexToRgba(catColor, 0.2),
                             borderColor: respColor,
                             color: "#0f172a",
                           }
@@ -673,8 +667,8 @@ export const PreviewPanel: React.FC = () => {
                           }
                         : assignedCat
                         ? {
-                            backgroundColor: hexToRgba(catColor, 0.2),
-                            borderColor: catColor,
+                            backgroundColor: catLayerMode === "front" ? "transparent" : hexToRgba(catColor, 0.2),
+                            borderColor: catLayerMode === "front" ? hexToRgba(catColor, 0.5) : catColor,
                             color: "#0f172a",
                           }
                         : {
@@ -684,9 +678,17 @@ export const PreviewPanel: React.FC = () => {
                           }
                     }
                   >
+                    {/* r·c coordinate tag */}
+                    <span
+                      className="absolute left-1.5 top-1 font-mono text-[8.5px] leading-none"
+                      style={{ color: "#9a8f78" }}
+                    >
+                      {`r${cell.row}·c${cell.col}`}
+                    </span>
+
                     {/* Pre-filled content — top portion */}
                     <div
-                      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                      className={`flex min-h-0 flex-1 flex-col overflow-hidden pt-3${assignedCat && catLayerMode !== "replace" ? " relative" : ""}`}
                       style={
                         assignedCat && (survey.selectionMode === "dropdown" || hasResponse)
                           ? { borderBottom: `1px solid ${hexToRgba(catColor, 0.4)}` }
@@ -696,7 +698,7 @@ export const PreviewPanel: React.FC = () => {
                       }
                     >
                       {assignedCat ? (
-                        renderAssignedContent(assignedCat, catImage)
+                        renderAssignedContent(assignedCat, catImage, catColor, catLayerMode)
                       ) : (
                         <div className="flex flex-1 items-center justify-center text-[9px] text-slate-400">
                           —
@@ -723,8 +725,25 @@ export const PreviewPanel: React.FC = () => {
                         </select>
                       </div>
                     )}
-                    {/* Paint / drag-drop mode — response indicator when applied */}
-                    {survey.selectionMode !== "dropdown" && hasResponse && (
+                    {/* Paint / drag-drop mode — response overlay (front mode) */}
+                    {survey.selectionMode !== "dropdown" && hasResponse && respImage && respLayerMode === "front" && (
+                      <>
+                        <img
+                          src={respImage}
+                          alt={selectedResponse}
+                          className="absolute inset-0 h-full w-full object-contain"
+                          style={{ zIndex: 10 }}
+                        />
+                        <span
+                          className="absolute bottom-0 left-0 right-0 truncate px-0.5 pb-0.5 text-center text-[8px] font-semibold leading-tight"
+                          style={{ backgroundColor: hexToRgba(respColor, 0.85), color: respColor, zIndex: 11 }}
+                        >
+                          {selectedResponse}
+                        </span>
+                      </>
+                    )}
+                    {/* Paint / drag-drop mode — response band (replace / behind) */}
+                    {survey.selectionMode !== "dropdown" && hasResponse && !(respImage && respLayerMode === "front") && (
                       <div
                         className="flex flex-shrink-0 flex-col items-center overflow-hidden px-0.5 pb-0.5"
                         style={{
@@ -795,7 +814,7 @@ export const PreviewPanel: React.FC = () => {
                     setDragOverCell(null);
                     setDraggedCategory(null);
                   }}
-                  className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border font-medium ${
+                  className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border font-medium ${
                     ((!expEnabled && survey.allowInteraction && survey.selectionMode === "paint") ||
                       (expEnabled &&
                         experimentalTab === "setup" &&
@@ -803,46 +822,62 @@ export const PreviewPanel: React.FC = () => {
                     !cell.isCenter
                       ? "cursor-pointer transition-colors"
                       : ""
-                  }`}
+                  }${assignedCat && catLayerMode !== "replace" ? " relative" : ""}`}
                   style={
                     assignedCat
-                      ? {
-                          backgroundColor: hexToRgba(catColor, 0.2),
-                          borderColor: catColor,
-                          color: "#0f172a",
-                        }
+                      ? catLayerMode === "front"
+                        ? {
+                            backgroundColor: "transparent",
+                            borderColor: hexToRgba(catColor, 0.5),
+                            color: "#2a241c",
+                          }
+                        : {
+                            backgroundColor: hexToRgba(catColor, 0.2),
+                            borderColor: catColor,
+                            color: "#2a241c",
+                          }
                       : isDropTarget
                         ? {
-                            backgroundColor: "#e2e8f0",
-                            borderColor: "#0f172a",
-                            color: "#0f172a",
+                            backgroundColor: "#e2dccf",
+                            borderColor: "#2a241c",
+                            color: "#2a241c",
                           }
                         : cell.isCenter
                           ? {
-                              backgroundColor: "#f0f9ff",
-                              borderColor: "#38bdf8",
-                              color: "#0f172a",
+                              backgroundColor: "#f7ece9",
+                              borderStyle: "dashed",
+                              borderColor: "#c08a92",
+                              color: "#8a2e3b",
                             }
                           : {
-                              backgroundColor: "#ffffff",
-                              borderColor: "#cbd5e1",
-                              color: "#1e293b",
+                              backgroundColor: "#fbf8f1",
+                              borderStyle: "dashed",
+                              borderColor: "#d8cdb8",
+                              color: "#2a241c",
                             }
                   }
                 >
+                  {/* r·c coordinate tag */}
+                  <span
+                    className="absolute left-1.5 top-1 font-mono text-[8.5px] leading-none"
+                    style={{ color: cell.isCenter ? "#c79aa0" : "#9a8f78" }}
+                  >
+                    {`r${cell.row}·c${cell.col}`}
+                  </span>
+
                   {assignedCat ? (
-                    renderAssignedContent(assignedCat, catImage)
+                    renderAssignedContent(assignedCat, catImage, catColor, catLayerMode)
                   ) : !expEnabled && survey.allowInteraction &&
                     survey.selectionMode === "dropdown" &&
                     !cell.isCenter ? (
-                    <div className="flex h-full flex-col justify-center gap-1 p-1">
+                    <div className="flex h-full flex-col justify-center gap-1 p-1 pt-3">
                       <select
                         aria-label={`Choose label for row ${cell.row} column ${cell.col}`}
                         value={assignments[cell.key] ?? ""}
                         onChange={(e) =>
                           applyAssignment(cell.exportKey, cell.key, e.target.value || null)
                         }
-                        className="w-full min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] text-slate-900 outline-none focus:border-sky-500"
+                        className="w-full min-w-0 rounded border border-hairline bg-white px-1.5 py-1 text-[10px] text-ink outline-none"
                       >
                         <option value="">Choose label</option>
                         {categories.map((cat) => (
@@ -853,8 +888,8 @@ export const PreviewPanel: React.FC = () => {
                       </select>
                     </div>
                   ) : cell.isCenter ? (
-                    <div className="flex flex-1 items-center justify-center p-1">
-                      <span className="w-full break-words text-center text-[10px] leading-tight">
+                    <div className="flex flex-1 items-center justify-center p-1 pt-3">
+                      <span className="w-full break-words text-center font-serif text-[10px] font-semibold leading-tight text-accent">
                         {layout.centerCellLabel || "Your House"}
                       </span>
                     </div>
@@ -865,14 +900,47 @@ export const PreviewPanel: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex justify-end">
+        {/* Legend chips */}
+        {(expEnabled
+          ? experimentalTab === "respondent" ? responseLabels : categories
+          : categories
+        ).length > 0 && (
+          <div className="flex flex-wrap gap-3">
+            {(expEnabled
+              ? experimentalTab === "respondent" ? responseLabels : categories
+              : categories
+            ).map((item) => {
+              const color = expEnabled && experimentalTab === "respondent"
+                ? (experimental.responseLabelMeta?.[item]?.color ?? "#8b5cf6")
+                : (survey.categoryMeta[item]?.color ?? "#60a5fa");
+              return (
+                <span key={item} className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  {item}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Bottom action bar */}
+        <div className="flex items-center gap-2.5 border-t border-hairline-warm pt-4">
           <button
             type="button"
             onClick={() => setIsCodeModalOpen(true)}
-            className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            className="flex-1 rounded-xl bg-accent py-3 text-center text-[14.5px] font-bold text-white hover:bg-accent/90"
           >
             Export to Qualtrics
           </button>
+          {expEnabled && experimental.prefillMode === "weighted" && (
+            <button
+              type="button"
+              onClick={regenerateWeighted}
+              className="rounded-xl border border-hairline px-4 py-3 text-[13.5px] font-bold text-ink-muted hover:border-accent/40 hover:text-ink"
+            >
+              Regenerate
+            </button>
+          )}
         </div>
       </section>
 

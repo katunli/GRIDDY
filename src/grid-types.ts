@@ -21,9 +21,12 @@ export interface TuningConfig {
   previewHeight: number;
 }
 
+export type LayerMode = "replace" | "front" | "behind";
+
 export interface CategoryMeta {
   color: string;    // hex color, e.g. "#f87171"
   imageUrl: string; // optional image URL shown in cell
+  layerMode?: LayerMode;
 }
 
 export type SelectionMode = "paint" | "dropdown" | "dragdrop";

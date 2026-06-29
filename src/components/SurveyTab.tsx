@@ -320,6 +320,40 @@ export const SurveyTab: React.FC = () => {
                         className="rounded-md border border-slate-300 px-2 py-1.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                       />
                     </label>
+
+                    {meta.imageUrl && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-slate-700">Layer mode</span>
+                        <div className="flex gap-3">
+                          {(
+                            [
+                              { value: "replace", label: "Replace" },
+                              { value: "front", label: "Layer on top" },
+                              { value: "behind", label: "Layer behind" },
+                            ] as const
+                          ).map(({ value, label }) => (
+                            <label key={value} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+                              <input
+                                type="radio"
+                                name={`respLayerMode-${lbl}`}
+                                value={value}
+                                checked={(meta.layerMode ?? "replace") === value}
+                                onChange={() =>
+                                  updateExperimental({
+                                    responseLabelMeta: {
+                                      ...experimental.responseLabelMeta,
+                                      [lbl]: { ...meta, layerMode: value },
+                                    },
+                                  })
+                                }
+                                className="h-3.5 w-3.5"
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -416,6 +450,40 @@ export const SurveyTab: React.FC = () => {
                     className="rounded-md border border-slate-300 px-2 py-1.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </label>
+
+                {meta.imageUrl && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-700">Layer mode</span>
+                    <div className="flex gap-3">
+                      {(
+                        [
+                          { value: "replace", label: "Replace" },
+                          { value: "front", label: "Layer on top" },
+                          { value: "behind", label: "Layer behind" },
+                        ] as const
+                      ).map(({ value, label }) => (
+                        <label key={value} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+                          <input
+                            type="radio"
+                            name={`catLayerMode-${cat}`}
+                            value={value}
+                            checked={(meta.layerMode ?? "replace") === value}
+                            onChange={() =>
+                              updateSurvey({
+                                categoryMeta: {
+                                  ...survey.categoryMeta,
+                                  [cat]: { ...meta, layerMode: value },
+                                },
+                              })
+                            }
+                            className="h-3.5 w-3.5"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

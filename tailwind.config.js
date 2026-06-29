@@ -19,6 +19,32 @@ module.exports = {
       },
     },
     extend: {
+      colors: {
+        paper: {
+          DEFAULT: "#ece7da",
+          window: "#f3efe6",
+          card: "#fbf8f1",
+        },
+        ink: {
+          DEFAULT: "#2a241c",
+          muted: "#8a8170",
+          faint: "#a0967f",
+        },
+        accent: {
+          DEFAULT: "#8a2e3b",
+          soft: "#f7ece9",
+          tint: "#f0e0dc",
+        },
+        hairline: {
+          DEFAULT: "#e2dccf",
+          warm: "#e7e0d2",
+        },
+      },
+      fontFamily: {
+        serif: ["'Source Serif 4'", "serif"],
+        sans: ["'Hanken Grotesk'", "sans-serif"],
+        mono: ["'IBM Plex Mono'", "monospace"],
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
