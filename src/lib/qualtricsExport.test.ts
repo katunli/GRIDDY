@@ -1,12 +1,38 @@
 import { describe, it, expect } from "vitest";
 import {
   sanitizeEmbeddedDataField,
+  buildQualtricsSnippet,
   buildQualtricsQsf,
   buildQualtricsQsfForConfig,
   qsfEmbeddedFields,
   QualtricsQsfItem,
 } from "./qualtricsExport";
 import { GridConfig } from "../grid-types";
+
+function makeExperimentalConfig(
+  selectionMode: "paint" | "dropdown" | "dragdrop",
+): GridConfig {
+  return makeConfig({
+    survey: {
+      categoriesCsv: "A, B",
+      allowInteraction: true,
+      selectionMode,
+      advancedCategories: false,
+      categoryMeta: {},
+    },
+    experimental: {
+      enabled: true,
+      prefillMode: "weighted",
+      fixedAssignments: {},
+      weightedEntries: [{ category: "A", weight: 1 }],
+      responseLabelsCsv: "Safe, Unsafe",
+      responseLabelMeta: {
+        Safe: { color: "#22c55e", imageUrl: "" },
+        Unsafe: { color: "#ef4444", imageUrl: "" },
+      },
+    },
+  });
+}
 
 function makeConfig(overrides: Partial<GridConfig> = {}): GridConfig {
   return {
@@ -250,5 +276,46 @@ describe("buildQualtricsQsf", () => {
     );
     expect(q.Payload.QuestionJS).toContain('setEmbeddedData("MyPrefills"');
     expect(q.Payload.QuestionJS).toContain('setEmbeddedData("MyResponses"');
+  });
+});
+
+describe("buildQualtricsSnippet experimental respondent input methods", () => {
+  // The generated JS contains every branch; selectionMode is embedded config
+  // that decides which one runs at runtime. So we assert (a) valid JS, (b) all
+  // three reaction input methods are implemented (the bug was that only the
+  // dropdown existed), and (c) the chosen mode is carried in the config.
+
+  it("emits syntactically valid JavaScript for every input method", () => {
+    for (const mode of ["paint", "dropdown", "dragdrop"] as const) {
+      const js = buildQualtricsSnippet(makeExperimentalConfig(mode));
+      expect(() => new Function(js)).not.toThrow();
+    }
+  });
+
+  it("implements paint, drag-drop, and dropdown reaction placement", () => {
+    const js = buildQualtricsSnippet(makeExperimentalConfig("paint"));
+    // paint: click-to-place reaction toolbar
+    expect(js).toContain('respToolbarLabel.textContent = "Reacting:"');
+    expect(js).toContain("experimentalResponses[cellKey] = activeResponseLabel");
+    // drag-drop: draggable reaction tray + clear chip
+    expect(js).toContain("Drag a reaction onto a cell:");
+    expect(js).toContain("createResponseChip");
+    expect(js).toContain("__CLEAR_RESP__");
+    // dropdown: per-cell select still available
+    expect(js).toContain("— react —");
+    // each path is gated on the runtime selectionMode
+    expect(js).toContain(
+      'isExperimental && responseLabels.length > 0 && selectionMode === "paint"',
+    );
+    expect(js).toContain(
+      'isExperimental && responseLabels.length > 0 && selectionMode === "dragdrop"',
+    );
+  });
+
+  it("carries the selected input method in the embedded config", () => {
+    for (const mode of ["paint", "dropdown", "dragdrop"] as const) {
+      const js = buildQualtricsSnippet(makeExperimentalConfig(mode));
+      expect(js).toContain(`"selectionMode": "${mode}"`);
+    }
   });
 });

@@ -65,6 +65,8 @@ Qualtrics.SurveyEngine.addOnReady(function()
 	var assignments = {};
 	var activeCategory = null;
 	var draggedCategory = null;
+	var activeResponseLabel = null;
+	var draggedResponseLabel = null;
 
 	// Experimental mode
 	var expCfg = cfg.experimental || {};
@@ -78,6 +80,9 @@ Qualtrics.SurveyEngine.addOnReady(function()
 			.split(",")
 			.map(function (l) { return l.trim(); })
 			.filter(function (l) { return l.length > 0; });
+	}
+	if (responseLabels.length > 0) {
+		activeResponseLabel = responseLabels[0];
 	}
 	var prefills = {};
 	var experimentalResponses = {};
@@ -103,6 +108,11 @@ Qualtrics.SurveyEngine.addOnReady(function()
 	function getCategoryMeta(catName) {
 		if (!surveyCfg.categoryMeta) return {};
 		return surveyCfg.categoryMeta[catName] || {};
+	}
+
+	function getResponseMeta(lbl) {
+		if (!expCfg.responseLabelMeta) return {};
+		return expCfg.responseLabelMeta[lbl] || {};
 	}
 
 	function persistAll() {
@@ -245,7 +255,51 @@ Qualtrics.SurveyEngine.addOnReady(function()
 		cellRef.style.borderColor = catColor || "#cbd5e1";
 		cellRef.appendChild(topDiv);
 
-		// Bottom portion: response dropdown
+		// Bottom portion: how the respondent reacts depends on selectionMode.
+		// dropdown -> per-cell <select>; paint/dragdrop -> the cell itself is the
+		// target and we just render the placed reaction as a colored band.
+		if (responseLabels.length > 0 && selectionMode !== "dropdown") {
+			var placed = experimentalResponses[key];
+			if (placed) {
+				var respMeta = getResponseMeta(placed);
+				var respColor = respMeta.color || "#8b5cf6";
+				var respImage = respMeta.imageUrl || "";
+				var band = document.createElement("div");
+				band.style.flexShrink = "0";
+				band.style.display = "flex";
+				band.style.flexDirection = "column";
+				band.style.alignItems = "center";
+				band.style.overflow = "hidden";
+				band.style.padding = "0 2px 2px";
+				band.style.backgroundColor = hexToRgba(respColor, 0.15);
+				band.style.borderTop = "1px solid " + hexToRgba(respColor, 0.4);
+				if (respImage) {
+					var rImg = document.createElement("img");
+					rImg.src = respImage;
+					rImg.alt = placed;
+					rImg.style.marginTop = "2px";
+					rImg.style.maxHeight = "16px";
+					rImg.style.maxWidth = "100%";
+					rImg.style.objectFit = "contain";
+					band.appendChild(rImg);
+				}
+				var rText = document.createElement("div");
+				rText.textContent = placed;
+				rText.style.width = "100%";
+				rText.style.textAlign = "center";
+				rText.style.fontSize = "8px";
+				rText.style.fontWeight = "600";
+				rText.style.lineHeight = "1.2";
+				rText.style.whiteSpace = "nowrap";
+				rText.style.overflow = "hidden";
+				rText.style.textOverflow = "ellipsis";
+				rText.style.color = respColor;
+				band.appendChild(rText);
+				cellRef.style.borderColor = respColor;
+				cellRef.appendChild(band);
+			}
+			return;
+		}
 		if (responseLabels.length > 0) {
 			var bottomDiv = document.createElement("div");
 			bottomDiv.style.flexShrink = "0";
@@ -471,6 +525,40 @@ Qualtrics.SurveyEngine.addOnReady(function()
 		return chip;
 	}
 
+	function createResponseChip(lbl, isClear) {
+		var meta = isClear ? {} : getResponseMeta(lbl);
+		var color = isClear ? "#94a3b8" : (meta.color || "#8b5cf6");
+		var chip = document.createElement("button");
+		chip.type = "button";
+		chip.textContent = lbl;
+		chip.style.display = "inline-flex";
+		chip.style.alignItems = "center";
+		chip.style.justifyContent = "center";
+		chip.style.borderRadius = "9999px";
+		chip.style.border = "1px solid #e2e8f0";
+		chip.style.padding = "4px 10px";
+		chip.style.fontSize = "11px";
+		chip.style.fontWeight = "500";
+		chip.style.backgroundColor = isClear ? "#ffffff" : hexToRgba(color, 0.12);
+		chip.style.color = "#334155";
+		chip.style.cursor = "grab";
+		chip.draggable = true;
+
+		chip.ondragstart = function (event) {
+			draggedResponseLabel = isClear ? "__CLEAR_RESP__" : lbl;
+			if (event.dataTransfer) {
+				event.dataTransfer.setData("text/plain", draggedResponseLabel);
+				event.dataTransfer.effectAllowed = "move";
+			}
+		};
+
+		chip.ondragend = function () {
+			draggedResponseLabel = null;
+		};
+
+		return chip;
+	}
+
 	var questionText = document.createElement("p");
 	questionText.textContent = cfg.layout.questionText;
 	questionText.style.marginBottom = "8px";
@@ -561,6 +649,93 @@ Qualtrics.SurveyEngine.addOnReady(function()
 
 		dragHelp.appendChild(dragTray);
 		container.appendChild(dragHelp);
+	}
+
+	if (isExperimental && responseLabels.length > 0 && selectionMode === "paint") {
+		var respToolbar = document.createElement("div");
+		respToolbar.style.display = "flex";
+		respToolbar.style.flexWrap = "wrap";
+		respToolbar.style.alignItems = "center";
+		respToolbar.style.gap = "4px";
+		respToolbar.style.marginBottom = "6px";
+
+		var respToolbarLabel = document.createElement("span");
+		respToolbarLabel.textContent = "Reacting:";
+		respToolbarLabel.style.fontSize = "11px";
+		respToolbarLabel.style.fontWeight = "600";
+		respToolbarLabel.style.color = "#475569";
+		respToolbar.appendChild(respToolbarLabel);
+
+		responseLabels.forEach(function (lbl) {
+			var meta = getResponseMeta(lbl);
+			var color = meta.color || "#8b5cf6";
+			var btn = document.createElement("button");
+			btn.type = "button";
+			btn.dataset.resp = lbl;
+			btn.style.display = "inline-flex";
+			btn.style.alignItems = "center";
+			btn.style.gap = "4px";
+			btn.style.borderRadius = "9999px";
+			btn.style.border = lbl === activeResponseLabel ? "1px solid " + color : "1px solid #e2e8f0";
+			btn.style.padding = "2px 8px";
+			btn.style.fontSize = "11px";
+			btn.style.backgroundColor = lbl === activeResponseLabel ? hexToRgba(color, 0.15) : "#ffffff";
+			btn.style.color = "#334155";
+			btn.style.cursor = "pointer";
+
+			var dot = document.createElement("span");
+			dot.style.display = "inline-block";
+			dot.style.width = "8px";
+			dot.style.height = "8px";
+			dot.style.borderRadius = "9999px";
+			dot.style.backgroundColor = color;
+			dot.style.flexShrink = "0";
+			btn.appendChild(dot);
+			btn.appendChild(document.createTextNode(lbl));
+
+			btn.onclick = function () {
+				activeResponseLabel = lbl;
+				Array.prototype.forEach.call(respToolbar.querySelectorAll("button"), function (other) {
+					var otherMeta = getResponseMeta(other.dataset.resp);
+					var otherColor = otherMeta.color || "#8b5cf6";
+					var isActive = other.dataset.resp === lbl;
+					other.style.backgroundColor = isActive ? hexToRgba(otherColor, 0.15) : "#ffffff";
+					other.style.borderColor = isActive ? otherColor : "#e2e8f0";
+				});
+			};
+
+			respToolbar.appendChild(btn);
+		});
+
+		container.appendChild(respToolbar);
+	}
+
+	if (isExperimental && responseLabels.length > 0 && selectionMode === "dragdrop") {
+		var respDragHelp = document.createElement("div");
+		respDragHelp.style.display = "flex";
+		respDragHelp.style.flexDirection = "column";
+		respDragHelp.style.gap = "6px";
+		respDragHelp.style.marginBottom = "8px";
+
+		var respDragLabel = document.createElement("span");
+		respDragLabel.textContent = "Drag a reaction onto a cell:";
+		respDragLabel.style.fontSize = "11px";
+		respDragLabel.style.fontWeight = "600";
+		respDragLabel.style.color = "#475569";
+		respDragHelp.appendChild(respDragLabel);
+
+		var respDragTray = document.createElement("div");
+		respDragTray.style.display = "flex";
+		respDragTray.style.flexWrap = "wrap";
+		respDragTray.style.gap = "6px";
+
+		responseLabels.forEach(function (lbl) {
+			respDragTray.appendChild(createResponseChip(lbl, false));
+		});
+		respDragTray.appendChild(createResponseChip("Clear reaction", true));
+
+		respDragHelp.appendChild(respDragTray);
+		container.appendChild(respDragHelp);
 	}
 
 	var totalCellsCount = cfg.layout.rows * cfg.layout.cols;
@@ -657,6 +832,60 @@ Qualtrics.SurveyEngine.addOnReady(function()
 						delete assignments[cellKey];
 					} else {
 						assignments[cellKey] = dropped;
+					}
+					persistAll();
+					renderCell(cellRef, cellKey, isCenterCell);
+				};
+			})(cell, key, isCenter);
+		}
+
+		if (isExperimental && responseLabels.length > 0 && selectionMode === "paint") {
+			cell.style.cursor = isCenter ? "default" : "pointer";
+			(function (cellRef, cellKey, isCenterCell) {
+				cellRef.onclick = function () {
+					if (isCenterCell) return;
+					if (!activeResponseLabel) return;
+					if (experimentalResponses[cellKey] === activeResponseLabel) {
+						delete experimentalResponses[cellKey];
+					} else {
+						experimentalResponses[cellKey] = activeResponseLabel;
+					}
+					persistAll();
+					renderCell(cellRef, cellKey, isCenterCell);
+				};
+			})(cell, key, isCenter);
+		}
+
+		if (isExperimental && responseLabels.length > 0 && selectionMode === "dragdrop") {
+			(function (cellRef, cellKey, isCenterCell) {
+				cellRef.style.cursor = isCenterCell ? "default" : "copy";
+				cellRef.ondragover = function (event) {
+					if (isCenterCell) return;
+					event.preventDefault();
+					if (event.dataTransfer) {
+						event.dataTransfer.dropEffect = "move";
+					}
+					cellRef.style.borderColor = "#0f172a";
+					cellRef.style.backgroundColor = "#e2e8f0";
+				};
+				cellRef.ondragleave = function () {
+					renderCell(cellRef, cellKey, isCenterCell);
+				};
+				cellRef.ondrop = function (event) {
+					if (isCenterCell) return;
+					event.preventDefault();
+					var dropped = draggedResponseLabel;
+					if (!dropped && event.dataTransfer) {
+						dropped = event.dataTransfer.getData("text/plain");
+					}
+					if (!dropped) {
+						renderCell(cellRef, cellKey, isCenterCell);
+						return;
+					}
+					if (dropped === "__CLEAR_RESP__") {
+						delete experimentalResponses[cellKey];
+					} else {
+						experimentalResponses[cellKey] = dropped;
 					}
 					persistAll();
 					renderCell(cellRef, cellKey, isCenterCell);
